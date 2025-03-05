@@ -1,4 +1,5 @@
 const express = require("express");
+const OpenAI = require("openai");
 const axios = require("axios");
 const cors = require("cors");
 const session = require("express-session");
@@ -6,6 +7,7 @@ const session = require("express-session");
 require("dotenv").config();
 
 const app = express();
+const openai = new OpenAI({ apiKey: process.env.OPEN_API });
 const PORT = process.env.PORT || 3000;
 
 app.use(cors({ origin: "http://localhost:5173", credentials: true }));
@@ -96,6 +98,12 @@ app.get("/me/top-genres", async (req, res) => {
   if (!req.session.accessToken)
     return res.status(401).json({ message: "Not authorized" });
 
+  //if session already contains top-genres, serve top-genres from session
+  if (req.session.genres) {
+    console.log("serving session results");
+    return res.json({ genres: req.session.genres });
+  }
+
   try {
     const response = await axios.get(
       "https://api.spotify.com/v1/me/top/artists",
@@ -107,10 +115,50 @@ app.get("/me/top-genres", async (req, res) => {
     const genres = [
       ...new Set(response.data.items.flatMap((artist) => artist.genres)),
     ];
+    req.session.genres = genres;
     res.json({ genres });
   } catch (e) {
     console.error("could not get artists", e);
   }
+});
+
+//uses top genres to serve book recommendations using the Hardcover API plus GPT
+//plans to convert this into NLP later on...
+app.get("/me/book-recommendations", async (req, res) => {
+  if (!req.session.accessToken) {
+    return res.status(401).json({ message: "Not authorized" });
+  }
+
+  if (!req.session.genres) {
+    console.log("could not find any fetched genres");
+    return res
+      .status(400)
+      .json({ message: "Missing genres in session. Please try again." });
+  }
+  console.log("finding book recommendations based on: ");
+  //get OpenAI API response here...
+  const completion = await openai.chat.completion.create({
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "developer",
+        content:
+          "You are a helpful AI assistant and an expert in music and literature. Given a list of music genres from a user's Spotify listening history, map them to their closest equivalent in common book genres. Format your response as JSON data.",
+      },
+      {
+        role: "user",
+        content: `${JSON.stringify(req.session.genres)}`,
+      },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        book_genres: ["genre1", "genre2", "genre3"],
+      },
+    },
+  });
+
+  //get HardCover API responses here
 });
 
 app.listen(PORT, () => {

@@ -7,7 +7,6 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    //
     const fetchTopGenres = async () => {
       try {
         const response = await axios.get(
@@ -18,13 +17,24 @@ const Dashboard = () => {
         );
 
         setGenres(response.data);
-        console.log("Fetched genres");
+        fetchBookRecommendations();
       } catch (e) {
         console.log("could not fetch genres", e);
       }
     };
 
-    const fetchBookReccomendations = async () => {};
+    const fetchBookRecommendations = async () => {
+      try {
+        const response = await axios.get(
+          "http://localhost:3000/me/book-recommendations",
+          {
+            withCredentials: true,
+          },
+        );
+      } catch (e) {
+        console.error("could not fetch book recommendations", e);
+      }
+    };
 
     fetchTopGenres();
     setLoading(false);
