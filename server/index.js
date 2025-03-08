@@ -3,6 +3,8 @@ const OpenAI = require("openai");
 const axios = require("axios");
 const cors = require("cors");
 const session = require("express-session");
+const z = require("zod");
+const { zodResponseFormat } = require("openai/helpers/zod");
 
 require("dotenv").config();
 
@@ -136,27 +138,31 @@ app.get("/me/book-recommendations", async (req, res) => {
       .json({ message: "Missing genres in session. Please try again." });
   }
   console.log("finding book recommendations based on: ");
+  console.log(req.session.genres[0]);
   //get OpenAI API response here...
-  const completion = await openai.chat.completion.create({
-    model: "gpt-4o-mini",
+  const tags = z.object({
+    tags: z.array(z.string()),
+  });
+
+  const completion = await openai.beta.chat.completions.parse({
+    model: "gpt-4o-mini-2024-07-18",
     messages: [
       {
-        role: "developer",
+        role: "system",
         content:
-          "You are a helpful AI assistant and an expert in music and literature. Given a list of music genres from a user's Spotify listening history, map them to their closest equivalent in common book genres. Format your response as JSON data.",
+          "Convert the Spotify music genres to relevant book recommendations",
       },
       {
         role: "user",
-        content: `${JSON.stringify(req.session.genres)}`,
+        content: req.session.genres.join(", "),
       },
     ],
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        book_genres: ["genre1", "genre2", "genre3"],
-      },
-    },
+    response_format: zodResponseFormat(tags, "genres"),
   });
+
+  const genres = completion.choices[0].message.parsed;
+
+  console.log(genres);
 
   //get HardCover API responses here
 });
